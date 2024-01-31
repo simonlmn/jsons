@@ -460,8 +460,17 @@ void Value::skip() const  {
   }
 }
 
+class IReader {
+public:
+  virtual Value begin() = 0;
+  virtual void end() = 0;
+  virtual bool failed() const = 0;
+
+  // TODO provide error details for better diagnostics/logging
+};
+
 template<typename Input, size_t max_token_length>
-class Reader final {
+class Reader final : public IReader {
   using Tokenizer = StoringTokenizer<Input, max_token_length, 2u>;
 
   Tokenizer _tokenizer;
@@ -469,17 +478,17 @@ class Reader final {
 public:
   Reader(Input& input) : _tokenizer(input) {}
 
-  Value begin() {
+  Value begin() override {
     Value root {_tokenizer};
     root.parse();
     return std::move(root);
   }
 
-  void end() {
+  void end() override {
     _tokenizer.skip();
   }
 
-  bool failed() const {
+  bool failed() const override {
     return _tokenizer.aborted();
   }
 
