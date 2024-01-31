@@ -201,7 +201,7 @@ public:
     return {_primitives.boolean};
   }
 
-  toolbox::Maybe<const char*> asString() const {
+  toolbox::Maybe<toolbox::ConstStr> asString() const {
     if (_type != ValueType::String) {
       return {};
     }
@@ -335,7 +335,7 @@ public:
     }
   }
   
-  const char* name() const { return _tokenizer->storedToken(1); }
+  toolbox::ConstStr name() const { return _tokenizer->storedToken(1); }
 };
 
 class Object final : public Value {

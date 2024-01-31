@@ -284,7 +284,7 @@ public:
     evaluate(INSERT_VALUE, "null");
   }
 
-  void boolean(const Maybe<bool>& value) override {
+  void boolean(const toolbox::Maybe<bool>& value) override {
     if (value) {
       evaluate(INSERT_VALUE, value.value() ? "true" : "false");
     } else {
@@ -292,7 +292,7 @@ public:
     }
   }
 
-  void number(const Maybe<int32_t>& value) override {
+  void number(const toolbox::Maybe<int32_t>& value) override {
     static char buffer[12];
     if (value) {
       snprintf(buffer, std::size(buffer), "%i", value.value());
@@ -302,7 +302,7 @@ public:
     }
   }
   
-  void number(const Maybe<const toolbox::Decimal&>& value) override {
+  void number(const toolbox::Maybe<const toolbox::Decimal&>& value) override {
     if (value) {
       evaluate(INSERT_VALUE, value.value().toString());
     } else {
@@ -310,7 +310,7 @@ public:
     }
   }
   
-  void string(const Maybe<const char*>& value) override {
+  void string(const toolbox::Maybe<const char*>& value) override {
     if (value) {
       evaluate(INSERT_STRING, value.value());
     } else {
@@ -318,7 +318,7 @@ public:
     }
   }
   
-  void string(const Maybe<const __FlashStringHelper*>& value) override {
+  void string(const toolbox::Maybe<const __FlashStringHelper*>& value) override {
     if (value) {
       evaluate(INSERT_STRING, value.value());
     } else {
