@@ -16,7 +16,7 @@ void setup() {
   writer.property("string").string("test");
   writer.property("boolean").boolean(true);
   writer.property("integer").number(123);
-  writer.property("decimal").number(toolbox::Decimal{234, 1, 2});
+  writer.property("decimal").number(toolbox::Decimal::fromFixedPoint(23401, 2));
   writer.property("object").openObject();
     writer.property("list").openList();
       writer.string("some text");

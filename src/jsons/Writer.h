@@ -3,7 +3,7 @@
 
 #include <toolbox/Decimal.h>
 #include <toolbox/Streams.h>
-#include <toolbox/ConstStr.h>
+#include <toolbox/String.h>
 
 namespace jsons {
 
@@ -15,10 +15,12 @@ public:
   virtual void number(const toolbox::Maybe<const toolbox::Decimal&>& value) = 0;
   virtual void string(const toolbox::Maybe<const char*>& value) = 0;
   virtual void string(const toolbox::Maybe<const __FlashStringHelper*>& value) = 0;
+  virtual void string(const toolbox::Maybe<toolbox::strref>& value) = 0;
   virtual void openList() = 0;
   virtual void openObject() = 0;
   virtual IWriter& property(const char* name) = 0;
   virtual IWriter& property(const __FlashStringHelper* name) = 0;
+  virtual IWriter& property(const toolbox::strref& name) = 0;
   virtual void close() = 0;
   virtual void end() = 0;
   virtual bool failed() const = 0;
@@ -125,7 +127,7 @@ class Writer final : public IWriter {
           _failed = _failed || (_output.write(SEPARATOR) != 1u);
         }
         
-        _failed = _failed || (_output.write(value) != toolbox::ConstStr(value).len());
+        _failed = _failed || (_output.write(value) != toolbox::strref(value).len());
 
         switch (peek()) {
           case DataStructure::EmptyObject:
@@ -152,7 +154,7 @@ class Writer final : public IWriter {
         }
 
         _failed = _failed || (_output.write(STRING_BEGIN) != 1u);
-        _failed = _failed || (_output.write(value) != toolbox::ConstStr(value).len()); // TODO handle escaping of " characters
+        _failed = _failed || (_output.write(value) != toolbox::strref(value).len()); // TODO handle escaping of " characters
         _failed = _failed || (_output.write(STRING_END) != 1u);
 
         switch (peek()) {
@@ -221,7 +223,7 @@ class Writer final : public IWriter {
             break;
         }
         _failed = _failed || (_output.write(PROPERTY_BEGIN) != 1u);
-        _failed = _failed || (_output.write(value) != toolbox::ConstStr(value).len()); // TODO handle escaping of " characters
+        _failed = _failed || (_output.write(value) != toolbox::strref(value).len()); // TODO handle escaping of " characters
         _failed = _failed || (_output.write(PROPERTY_END) != 1u);
         _failed = _failed || (_output.write(PROPERTY_VALUE_SEPARATOR) != 1u);
         allow(INSERT_VALUE | INSERT_STRING | OPEN_LIST | OPEN_OBJECT);
@@ -304,7 +306,7 @@ public:
   
   void number(const toolbox::Maybe<const toolbox::Decimal&>& value) override {
     if (value) {
-      evaluate(INSERT_VALUE, value.value().toString());
+      evaluate(INSERT_VALUE, value.value().toString().cstr());
     } else {
       null();
     }
@@ -326,6 +328,18 @@ public:
     }
   }
 
+  void string(const toolbox::Maybe<toolbox::strref>& value) override {
+    if (value) {
+      if (value.value().isInProgmem()) {
+        evaluate(INSERT_STRING, value.value().fpstr());
+      } else {
+        evaluate(INSERT_STRING, value.value().cstr());
+      }
+    } else {
+      null();
+    }
+  }
+
   void openList() override {
     evaluate(OPEN_LIST, "");
   }
@@ -341,6 +355,15 @@ public:
 
   IWriter& property(const __FlashStringHelper* name) override {
     evaluate(START_PROPERTY, name);
+    return *this;
+  }
+
+  IWriter& property(const toolbox::strref& name) override {
+    if (name.isInProgmem()) {
+      evaluate(START_PROPERTY, name.fpstr());
+    } else {
+      evaluate(START_PROPERTY, name.cstr());
+    }
     return *this;
   }
 
