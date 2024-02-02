@@ -2,6 +2,7 @@
 #define JSONS_READER_H_
 
 #include "Tokenizer.h"
+#include <toolbox/String.h>
 #include <toolbox/Maybe.h>
 #include <toolbox/Decimal.h>
 
@@ -56,27 +57,34 @@ public:
 protected:
   Tokenizer* _tokenizer;
   ValueType _type;
+  bool _consumed;
   struct {
     bool boolean;
     toolbox::Decimal decimal;
   } _primitives;
 
 public:
-  Value() : _tokenizer(nullptr), _type(ValueType::Invalid), _primitives() {}
-  Value(Tokenizer& tokenizer) : _tokenizer(&tokenizer), _type(ValueType::Invalid), _primitives() {}
+  Value() : _tokenizer(nullptr), _type(ValueType::Invalid), _consumed(false), _primitives() {}
+  Value(Tokenizer& tokenizer) : _tokenizer(&tokenizer), _type(ValueType::Invalid), _consumed(false), _primitives() {}
   Value(Value&& other) : Value() {
     std::swap(_tokenizer, other._tokenizer);
     std::swap(_type, other._type);
+    std::swap(_consumed, other._consumed);
     std::swap(_primitives, other._primitives);
   }
   Value& operator=(Value&& other) {
     if (this != &other) {
       std::swap(_tokenizer, other._tokenizer);
       std::swap(_type, other._type);
+      std::swap(_consumed, other._consumed);
       std::swap(_primitives, other._primitives);
     }
     return *this;
   }
+  ~Value() {
+    skip();
+  }
+
   Value(const Value& other) = delete;
   Value& operator=(const Value& other) = delete;
 
@@ -85,6 +93,7 @@ public:
   ValueType type() const { return _type; }
 
   void parse() {
+    skip();
     invalidate();
     if (_tokenizer) {
       _tokenizer->skip(); // skip whitespace
@@ -96,6 +105,7 @@ public:
             _type = ValueType::Null;
           } else {
             invalidate();
+            _tokenizer->abort(F("Expected 'null' value."));
           }
           break;
         case 't':
@@ -106,6 +116,7 @@ public:
             _type = ValueType::Boolean;
           } else {
             invalidate();
+            _tokenizer->abort(F("Expected boolean 'true'."));
           }
           break;
         case 'f':
@@ -116,6 +127,7 @@ public:
             _type = ValueType::Boolean;
           } else {
             invalidate();
+            _tokenizer->abort(F("Expected boolean 'false'."));
           }
           break;
         case '"':
@@ -132,6 +144,7 @@ public:
             // and the caller has to decide how to process it (concatenate into one big string or write it somewhere else).
             // Note: escape characters may be split accross fragments, so this must be carried over.
             invalidate();
+            _tokenizer->abort(F("String longer than maximum token length."));
           }
           break;
         case '-':
@@ -157,6 +170,7 @@ public:
               }
             } else {
               invalidate();
+              _tokenizer->abort(F("Invalid number format."));
             }
           }
           break;
@@ -168,15 +182,16 @@ public:
           break;
         default:
           invalidate();
+          _tokenizer->abort(F("Unexpected character at start of value."));
           break;
       }
 
       if (valid()) {
         // skip whitespace in advance to make final value consume the input fully
         _tokenizer->skip();
-      } else {
-        _tokenizer->abort();
       }
+
+      _consumed = false;
     }
   }
 
@@ -201,18 +216,18 @@ public:
     return {_primitives.boolean};
   }
 
-  toolbox::Maybe<toolbox::ConstStr> asString() const {
+  toolbox::Maybe<toolbox::strref> asString() const {
     if (_type != ValueType::String) {
       return {};
     }
     return {_tokenizer->storedToken(0)};
   }
 
-  List asList() const;
+  List asList();
   
-  Object asObject() const;
+  Object asObject();
 
-  void skip() const;
+  void skip();
 };
 
 class List final : public Value {
@@ -228,25 +243,9 @@ public:
     Tokenizer* _tokenizer;
     Value _current;
 
-  public:
-    Iterator() : _tokenizer(nullptr), _current() {}
-    Iterator(Tokenizer& tokenizer) : _tokenizer(&tokenizer), _current(tokenizer) {
-      _tokenizer->skip(); // skip whitespace
-      if (_tokenizer->peek("]") == ']') {
-        _tokenizer->pop();
-        _tokenizer->skip(); // skip whitespace
-        _current.invalidate();
-      } else {
-        _current.parse();
-      }
-    }
-
-    const Value& operator*() const {
-      return _current;
-    }
-
-    Iterator& operator++() {
+    void advance() {
       if (_current.valid()) {
+        _current.skip();
         _tokenizer->skip(); // skip whitespace
         switch (_tokenizer->peek(",]")) {
           case ',':
@@ -259,11 +258,51 @@ public:
             _current.invalidate();
             break;
           default:
-            _tokenizer->abort();
+            _tokenizer->abort(F("Unexpected character in list."));
             _current.invalidate();
             break;
         }
       }
+    }
+
+  public:
+    Iterator() : _tokenizer(nullptr), _current() {}
+    Iterator(Tokenizer& tokenizer) : _tokenizer(&tokenizer), _current(tokenizer) {
+      _tokenizer->skip(); // skip whitespace
+      if (_tokenizer->peek("]") == ']') {
+        _tokenizer->pop();
+        _tokenizer->skip(); // skip whitespace
+        _current.invalidate();
+      } else {
+        _current.parse();
+      }
+    }
+    Iterator(Iterator&& other) : Iterator() {
+      std::swap(_tokenizer, other._tokenizer);
+      std::swap(_current, other._current);
+    }
+    Iterator& operator=(Iterator&& other) {
+      if (this != &other) {
+        std::swap(_tokenizer, other._tokenizer);
+        std::swap(_current, other._current);
+      }
+      return *this;
+    }
+    ~Iterator() {
+      while (_current.valid()) {
+        advance();
+      }
+    }
+
+    Iterator(const Iterator& other) = delete;
+    Iterator& operator=(const Iterator& other) = delete;
+
+    Value& operator*() {
+      return _current;
+    }
+
+    Iterator& operator++() {
+      advance();
       return *this;
     }
 
@@ -275,6 +314,7 @@ public:
   using Value::Value;
   
   void parse() {
+    skip();
     invalidate();
     if (_tokenizer) {
       _tokenizer->skip(); // skip whitespace
@@ -282,16 +322,18 @@ public:
         _tokenizer->pop();
         _type = ValueType::List;
       } else {
-        _tokenizer->abort();
+        _tokenizer->abort(F("Expected '[' at begin of list."));
         invalidate();
       }
     }
+    _consumed = false;
   }
 
-  Iterator begin() const {
-    if (!valid()) {
+  Iterator begin() {
+    if (_consumed || !valid()) {
       return {};
     }
+    _consumed = true;
     return {*_tokenizer};
   }
 
@@ -305,6 +347,7 @@ public:
   using Value::Value;
   
   void parse() {
+    skip();
     invalidate();
     if (_tokenizer) {
       _tokenizer->skip(); // skip whitespace
@@ -320,22 +363,22 @@ public:
             _tokenizer->pop(); // remove :
             Value::parse();
           } else {
+            _tokenizer->abort(F("Expected ':' after property name."));
             invalidate();
           }
         } else {
+          _tokenizer->abort(F("String longer than maximum token length."));
           invalidate();
         }
       } else {
+        _tokenizer->abort(F("Expected '\"' at start of property name."));
         invalidate();
       }
-
-      if (!valid()) {
-        _tokenizer->abort();
-      }
     }
+    _consumed = false;
   }
   
-  toolbox::ConstStr name() const { return _tokenizer->storedToken(1); }
+  toolbox::strref name() const { return _tokenizer->storedToken(1); }
 };
 
 class Object final : public Value {
@@ -352,25 +395,9 @@ public:
     Tokenizer* _tokenizer;
     Property _current;
 
-  public:
-    Iterator() : _tokenizer(nullptr), _current() {}
-    Iterator(Tokenizer& tokenizer) : _tokenizer(&tokenizer), _current(tokenizer) {
-      _tokenizer->skip(); // skip whitespace
-      if (_tokenizer->peek("}") == '}') {
-        _tokenizer->pop();
-        _tokenizer->skip(); // skip whitespace
-        _current.invalidate();
-      } else {
-        _current.parse();
-      }
-    }
-
-    const Property& operator*() const {
-      return _current;
-    }
-
-    Iterator& operator++() {
+    void advance() {
       if (_current.valid()) {
+        _current.skip();
         _tokenizer->skip(); // skip whitespace
         switch (_tokenizer->peek(",}")) {
           case ',':
@@ -383,11 +410,51 @@ public:
             _current.invalidate();
             break;
           default:
-            _tokenizer->abort();
+            _tokenizer->abort(F("Unexpected character in object."));
             _current.invalidate();
             break;
         }
       }
+    }
+
+  public:
+    Iterator() : _tokenizer(nullptr), _current() {}
+    Iterator(Tokenizer& tokenizer) : _tokenizer(&tokenizer), _current(tokenizer) {
+      _tokenizer->skip(); // skip whitespace
+      if (_tokenizer->peek("}") == '}') {
+        _tokenizer->pop();
+        _tokenizer->skip(); // skip whitespace
+        _current.invalidate();
+      } else {
+        _current.parse();
+      }
+    }
+    Iterator(Iterator&& other) : Iterator() {
+      std::swap(_tokenizer, other._tokenizer);
+      std::swap(_current, other._current);
+    }
+    Iterator& operator=(Iterator&& other) {
+      if (this != &other) {
+        std::swap(_tokenizer, other._tokenizer);
+        std::swap(_current, other._current);
+      }
+      return *this;
+    }
+    ~Iterator() {
+      while (_current.valid()) {
+        advance();
+      }
+    }
+
+    Iterator(const Iterator& other) = delete;
+    Iterator& operator=(const Iterator& other) = delete;
+
+    Property& operator*() {
+      return _current;
+    }
+
+    Iterator& operator++() {
+      advance();
       return *this;
     }
     
@@ -399,6 +466,7 @@ public:
   using Value::Value;
   
   void parse() {
+    skip();
     invalidate();
     if (_tokenizer) {
       _tokenizer->skip(); // skip any whitespace
@@ -406,16 +474,18 @@ public:
         _tokenizer->pop();
         _type = ValueType::Object;
       } else {
-        _tokenizer->abort();
+        _tokenizer->abort(F("Expected '{' at begin of object."));
         invalidate();
       }
     }
+    _consumed = false;
   }
 
-  Iterator begin() const {
-    if (!valid()) {
+  Iterator begin() {
+    if (_consumed || !valid()) {
       return {};
     }
+    _consumed = true;
     return {*_tokenizer};
   }
 
@@ -424,25 +494,29 @@ public:
   }
 };
 
-Object Value::asObject() const {
-  if (_type != ValueType::Object) {
+Object Value::asObject() {
+  if (_consumed || _type != ValueType::Object) {
     return {};
   }
   Object object {*_tokenizer};
   object.parse();
+  _consumed = true;
   return std::move(object);
 }
 
-List Value::asList() const {
-  if (_type != ValueType::List) {
+List Value::asList() {
+  if (_consumed || _type != ValueType::List) {
     return {};
   }
   List list {*_tokenizer};
   list.parse();
+  _consumed = true;
   return std::move(list);
 }
 
-void Value::skip() const  {
+void Value::skip() {
+  if (_consumed) { return; }
+
   switch (_type) {
     case ValueType::List:
       for (auto& e : asList()) {
@@ -458,15 +532,22 @@ void Value::skip() const  {
       // nothing to do
       break;
   }
+
+  _consumed = true;
 }
+
+struct ReaderDiagnostics {
+  size_t streamPosition;
+  toolbox::strref bufferContents;
+  toolbox::strref errorMessage;
+};
 
 class IReader {
 public:
   virtual Value begin() = 0;
   virtual void end() = 0;
   virtual bool failed() const = 0;
-
-  // TODO provide error details for better diagnostics/logging
+  virtual ReaderDiagnostics diagnostics() const = 0;
 };
 
 template<typename Input, size_t max_token_length>
@@ -492,7 +573,13 @@ public:
     return _tokenizer.aborted();
   }
 
-  // TODO provide error details for better diagnostics/logging
+  ReaderDiagnostics diagnostics() const override {
+    return {
+      _tokenizer.positionInInput(),
+      _tokenizer.current(),
+      _tokenizer.abortReason()
+    };
+  };
 };
 
 template<typename Input, size_t max_token_length = 64u>

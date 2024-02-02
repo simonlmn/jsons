@@ -4,6 +4,7 @@
 #include <cstring>
 #include <algorithm>
 #include <toolbox/Streams.h>
+#include <toolbox/String.h>
 
 namespace jsons {
 
@@ -16,8 +17,9 @@ static size_t defaultEscapeHandler(const char** source, char** destination) {
 class ITokenizer {
 public:
   virtual size_t maxTokenLength() const = 0;
-  virtual void abort() = 0;
+  virtual void abort(const toolbox::strref& reason) = 0;
   virtual bool aborted() const = 0;
+  virtual const toolbox::strref& abortReason() const = 0;
   virtual bool completed() const = 0;
   virtual size_t positionInInput() const = 0;
   virtual char stopChar() const = 0;
@@ -39,6 +41,7 @@ private:
   Input& _input;
   size_t _inputCharsRead;
   bool _aborted;
+  toolbox::strref _abortReason;
   char _buffer[MAX_TOKEN_LENGTH + 1]; // add terminating zero
   size_t _bufferLength;
   size_t _stopPosition;
@@ -89,19 +92,24 @@ private:
   }
 
 public:
-  Tokenizer(Input& input) : _input(input), _inputCharsRead(0), _aborted(false), _buffer(), _bufferLength(0), _stopPosition(0), _stopChar('\0') {
+  Tokenizer(Input& input) : _input(input), _inputCharsRead(0), _aborted(false), _abortReason(), _buffer(), _bufferLength(0), _stopPosition(0), _stopChar('\0') {
   }
 
   size_t maxTokenLength() const override {
     return MAX_TOKEN_LENGTH;
   }
 
-  void abort() override {
+  void abort(const toolbox::strref& reason) override {
     _aborted = true;
+    _abortReason = reason;
   }
 
   bool aborted() const override {
     return _aborted;
+  }
+
+  const toolbox::strref& abortReason() const {
+    return _abortReason;
   }
 
   bool completed() const override {
@@ -241,7 +249,7 @@ class IStoringTokenizer : public ITokenizer {
 public:
   virtual size_t maxTokens() const = 0;
   virtual void storeToken(size_t index) = 0;
-  virtual const char* storedToken(size_t index) const = 0;
+  virtual toolbox::strref storedToken(size_t index) const = 0;
 };
 
 template<typename Input, size_t max_token_length, size_t max_tokens>
@@ -265,11 +273,11 @@ public:
     }
   }
 
-  const char* storedToken(size_t index) const override {
+  toolbox::strref storedToken(size_t index) const override {
     if (index < MAX_TOKENS) {
       return _tokenStorage[index];
     } else {
-      return "";
+      return {};
     }
   }
 };
