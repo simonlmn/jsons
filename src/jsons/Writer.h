@@ -288,7 +288,7 @@ public:
 
   void boolean(const toolbox::Maybe<bool>& value) override {
     if (value) {
-      evaluate(INSERT_VALUE, value.value() ? "true" : "false");
+      evaluate(INSERT_VALUE, value.get() ? "true" : "false");
     } else {
       null();
     }
@@ -297,7 +297,7 @@ public:
   void number(const toolbox::Maybe<int32_t>& value) override {
     static char buffer[12];
     if (value) {
-      snprintf(buffer, std::size(buffer), "%i", value.value());
+      snprintf(buffer, std::size(buffer), "%i", value.get());
       evaluate(INSERT_VALUE, buffer);
     } else {
       null();
@@ -306,7 +306,7 @@ public:
   
   void number(const toolbox::Maybe<const toolbox::Decimal&>& value) override {
     if (value) {
-      evaluate(INSERT_VALUE, value.value().toString().cstr());
+      evaluate(INSERT_VALUE, value.get().toString().cstr());
     } else {
       null();
     }
@@ -314,7 +314,7 @@ public:
   
   void string(const toolbox::Maybe<const char*>& value) override {
     if (value) {
-      evaluate(INSERT_STRING, value.value());
+      evaluate(INSERT_STRING, value.get());
     } else {
       null();
     }
@@ -322,7 +322,7 @@ public:
   
   void string(const toolbox::Maybe<const __FlashStringHelper*>& value) override {
     if (value) {
-      evaluate(INSERT_STRING, value.value());
+      evaluate(INSERT_STRING, value.get());
     } else {
       null();
     }
@@ -330,10 +330,10 @@ public:
 
   void string(const toolbox::Maybe<toolbox::strref>& value) override {
     if (value) {
-      if (value.value().isInProgmem()) {
-        evaluate(INSERT_STRING, value.value().fpstr());
+      if (value.get().isInProgmem()) {
+        evaluate(INSERT_STRING, value.get().fpstr());
       } else {
-        evaluate(INSERT_STRING, value.value().cstr());
+        evaluate(INSERT_STRING, value.get().cstr());
       }
     } else {
       null();

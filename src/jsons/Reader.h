@@ -161,8 +161,8 @@ public:
           {
             _tokenizer->nextWhile("-0123456789.");
             auto decimal = toolbox::Decimal::fromString(_tokenizer->current());
-            if (decimal.hasValue()) {
-              _primitives.decimal = decimal.value();
+            if (decimal) {
+              _primitives.decimal = decimal.get();
               if (_primitives.decimal.isInteger()) {
                 _type = ValueType::Integer;
               } else {
