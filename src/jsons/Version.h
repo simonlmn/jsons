@@ -1,1 +1,1 @@
-#define JSONS_VERSION "0.3.0"
+#define JSONS_VERSION "0.4.0"
