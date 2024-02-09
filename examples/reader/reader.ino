@@ -10,16 +10,16 @@ void printJson(jsons::Value& value) {
     Serial.println("null");
     break;
   case jsons::ValueType::Boolean:
-    Serial.println(value.asBoolean().value() ? "true" : "false");
+    Serial.println(value.asBoolean().get() ? "true" : "false");
     break;
   case jsons::ValueType::Integer:
-    Serial.println(value.asInteger().value());
+    Serial.println(value.asInteger().get());
     break;
   case jsons::ValueType::Decimal:
-    Serial.println(value.asDecimal().value().toString().cstr());
+    Serial.println(value.asDecimal().get().toString().toString());
     break;
   case jsons::ValueType::String:
-    Serial.println(value.asString().value().cstr());
+    Serial.println(value.asString().get().toString());
     break;
   case jsons::ValueType::List:
     Serial.println("[");
@@ -31,7 +31,7 @@ void printJson(jsons::Value& value) {
   case jsons::ValueType::Object:
     Serial.println("{");
     for (auto& p : value.asObject()) {
-      Serial.print(p.name().cstr());
+      Serial.print(p.name().toString());
       Serial.print(": ");
       printJson(p);
     }

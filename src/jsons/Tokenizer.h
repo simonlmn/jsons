@@ -60,7 +60,7 @@ private:
 
   void fillBuffer() {
     if (_bufferLength < MAX_TOKEN_LENGTH && _input.available() > 0) {
-      size_t charsRead = _input.read(_buffer + _bufferLength, MAX_TOKEN_LENGTH - _bufferLength);
+      size_t charsRead = _input.readString(_buffer + _bufferLength, MAX_TOKEN_LENGTH - _bufferLength);
       _inputCharsRead += charsRead;
       _bufferLength += charsRead;
       _buffer[_bufferLength] = '\0';

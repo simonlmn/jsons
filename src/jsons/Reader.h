@@ -545,7 +545,7 @@ struct ReaderDiagnostics {
 class IReader {
 public:
   virtual Value begin() = 0;
-  virtual void end() = 0;
+  virtual const IReader& end() = 0;
   virtual bool failed() const = 0;
   virtual ReaderDiagnostics diagnostics() const = 0;
 };
@@ -565,8 +565,12 @@ public:
     return std::move(root);
   }
 
-  void end() override {
+  const IReader& end() override {
     _tokenizer.skip();
+    if (!_tokenizer.completed()) {
+      _tokenizer.abort("Unexpected characters at end of document.");
+    }
+    return *this;
   }
 
   bool failed() const override {

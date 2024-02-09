@@ -18,8 +18,6 @@ public:
   virtual void string(const toolbox::Maybe<toolbox::strref>& value) = 0;
   virtual void openList() = 0;
   virtual void openObject() = 0;
-  virtual IWriter& property(const char* name) = 0;
-  virtual IWriter& property(const __FlashStringHelper* name) = 0;
   virtual IWriter& property(const toolbox::strref& name) = 0;
   virtual void close() = 0;
   virtual void end() = 0;
@@ -114,8 +112,7 @@ class Writer final : public IWriter {
     _stack[_stackIndex] = value;
   }
 
-  template<typename T>
-  void evaluate(uint8_t op, T value) {
+  void evaluate(uint8_t op, const toolbox::strref& value) {
     if (_failed || !isAllowed(op)) {
       _failed = true;
       return;
@@ -127,7 +124,7 @@ class Writer final : public IWriter {
           _failed = _failed || (_output.write(SEPARATOR) != 1u);
         }
         
-        _failed = _failed || (_output.write(value) != toolbox::strref(value).len());
+        _failed = _failed || (_output.write(value) != value.length());
 
         switch (peek()) {
           case DataStructure::EmptyObject:
@@ -154,7 +151,23 @@ class Writer final : public IWriter {
         }
 
         _failed = _failed || (_output.write(STRING_BEGIN) != 1u);
-        _failed = _failed || (_output.write(value) != toolbox::strref(value).len()); // TODO handle escaping of " characters
+        {
+          const size_t length = value.length();
+          size_t i = 0;
+          while (!_failed && i < length) {
+            char c = value.charAt(i);
+            switch (c)
+            {
+            case '\\':
+            case '"':
+              _failed = _failed || (_output.write('\\') != 1);
+            default:
+              _failed = _failed || (_output.write(c) != 1);
+              break;
+            }
+            ++i;
+          }
+        }
         _failed = _failed || (_output.write(STRING_END) != 1u);
 
         switch (peek()) {
@@ -223,7 +236,23 @@ class Writer final : public IWriter {
             break;
         }
         _failed = _failed || (_output.write(PROPERTY_BEGIN) != 1u);
-        _failed = _failed || (_output.write(value) != toolbox::strref(value).len()); // TODO handle escaping of " characters
+        {
+          const size_t length = value.length();
+          size_t i = 0;
+          while (!_failed && i < length) {
+            char c = value.charAt(i);
+            switch (c)
+            {
+            case '\\':
+            case '"':
+              _failed = _failed || (_output.write('\\') != 1);
+            default:
+              _failed = _failed || (_output.write(c) != 1);
+              break;
+            }
+            ++i;
+          }
+        }
         _failed = _failed || (_output.write(PROPERTY_END) != 1u);
         _failed = _failed || (_output.write(PROPERTY_VALUE_SEPARATOR) != 1u);
         allow(INSERT_VALUE | INSERT_STRING | OPEN_LIST | OPEN_OBJECT);
@@ -306,7 +335,7 @@ public:
   
   void number(const toolbox::Maybe<const toolbox::Decimal&>& value) override {
     if (value) {
-      evaluate(INSERT_VALUE, value.get().toString().cstr());
+      evaluate(INSERT_VALUE, value.get().toString());
     } else {
       null();
     }
@@ -330,11 +359,7 @@ public:
 
   void string(const toolbox::Maybe<toolbox::strref>& value) override {
     if (value) {
-      if (value.get().isInProgmem()) {
-        evaluate(INSERT_STRING, value.get().fpstr());
-      } else {
-        evaluate(INSERT_STRING, value.get().cstr());
-      }
+      evaluate(INSERT_STRING, value.get());
     } else {
       null();
     }
@@ -348,22 +373,8 @@ public:
     evaluate(OPEN_OBJECT, "");
   }
 
-  IWriter& property(const char* name) override {
-    evaluate(START_PROPERTY, name);
-    return *this;
-  }
-
-  IWriter& property(const __FlashStringHelper* name) override {
-    evaluate(START_PROPERTY, name);
-    return *this;
-  }
-
   IWriter& property(const toolbox::strref& name) override {
-    if (name.isInProgmem()) {
-      evaluate(START_PROPERTY, name.fpstr());
-    } else {
-      evaluate(START_PROPERTY, name.cstr());
-    }
+    evaluate(START_PROPERTY, name);
     return *this;
   }
 
