@@ -568,7 +568,7 @@ public:
   const IReader& end() override {
     _tokenizer.skip();
     if (!_tokenizer.completed()) {
-      _tokenizer.abort("Unexpected characters at end of document.");
+      _tokenizer.abort(F("Unexpected characters at end of document."));
     }
     return *this;
   }
