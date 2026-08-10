@@ -19,7 +19,7 @@ patch=${version[2]}
 pre_release_label=${version[3]}
 last_version=$major.$minor.$patch
 
-new_target_version='0.0.0'
+new_target_version=''
 new_pre_release_label=''
 
 echo "Last version was '${last_version}'."
@@ -52,7 +52,7 @@ if [[ "$pre_release_label" =~ ^[a-z].*$ ]]; then
     fi
 fi
 
-if [ -z "$new_tag" ]; then
+if [ -z "$new_target_version" ]; then
     bump_patch=_
     while [ "$bump_patch" != "y" -a "$bump_patch" != "n" -a -n "$bump_patch" ]
     do
@@ -146,5 +146,5 @@ fi
 git tag -a "$new_tag" -m "$tag_message"
 
 if command -v './post-release.sh' &> /dev/null; then
-    ./post-release.sh
+    new_tag=$new_tag ./post-release.sh
 fi
